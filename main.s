@@ -1,5 +1,6 @@
 global _start 
 section .data 
+	;store op1 at r11 and operator add r12
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;count <<;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	SYS_write 	equ	1	;sys code 
 	STDOUT	equ	1 	;output location 
@@ -21,17 +22,23 @@ section .data
 	LF	equ	10 
 
 	newLine		db	LF, NULL 
+	;rax selected sys servcie after called it return how many number of byte was read 
 	;rsi address to stores readed charactor 
 	;rdx number of character to read 
 	
-	MULTIPLICATION 	equ	52
-	ADDITION	equ	53
-	SUBTRACTION	equ	55		
-	FLOORDIVISION 	equ	57
+	MULTIPLICATION 	equ	42
+	ADDITION	equ	43
+	SUBTRACTION	equ	45		
+	FLOORDIVISION 	equ	47
 	SPACE		equ	32
 	opd1	db 0
 	opd2	db 0
 	debug1Msg	db	"debug111111111111 ", NULL 
+;;;;;;;error message;;;;;;;;;;;;;;;;;;
+	errOperand1		db	"invalid operand1", NULL
+	errOperand2		db	"invalid operand2", NULL
+	errOperator		db	"invalid operator", NULL 
+	
 section .bss
 	buffer	resb	255	;input buffer 
 section .text 
@@ -45,15 +52,8 @@ _start:
 	mov rsi, buffer 
 	mov rdx, 255 
 	syscall 
+	mov byte[buffer + rax], NULL ;;;;mark the terminator of current buffer 
 
-	;mov rax, SYS_write 
-	;mov rdi, STDOUT
-	;mov rsi, buffer
-	;sub rsi, 52 
-	; compare thing then 
-	;add rsi, 52
-	;mov rdx, 255
-	;syscall
 	jmp maibok
 exit: 
 	mov rax, EXIT_SUCCESS
@@ -62,52 +62,105 @@ exit:
 global maibok
 maibok:
 	push rbx
+	push r11
+	push r9
+	xor r9, r9 
+	xor r11, r11
 	mov rbx, buffer
 	call trimSpace	
 firstOp:
-	mov rcx, 4 
-firstOpLoop:
-	cmp byte[rbx], 48 
-	
-	;;;;debugging
-	;movzx rdi, byte[rbx]
-	;call printString
+	mov rcx, 4
 
-	je debug1
+	cmp byte[rbx], NULL 
+	je invalidOp1
+firstOpLoop:
+	cmp byte[rbx], NULL 
+	je firstOpDone
+	cmp byte[rbx], 48 
+	jl firstOpDone
 	cmp byte[rbx], 57
-	jg failDone
+	jg firstOpDone
 
 	movzx r10, byte[rbx]
 	sub r10, 48
 	imul r11, 10
 	add r11, r10
-	pop rdx
-	pop rax
 
 	inc rbx
 	dec rcx 
 	cmp rcx, 0 
 	jne firstOpLoop
+firstOpDone:
 	
-	mov rdi, r11
-	add rdi, 48
+	call trimSpace	
+operator: 
+	cmp byte[rbx], ADDITION 
+	je skipInvalidOperator
+	cmp byte[rbx], SUBTRACTION
+	je skipInvalidOperator
+	cmp byte[rbx], MULTIPLICATION
+	je skipInvalidOperator
+	cmp byte[rbx], FLOORDIVISION
+	je skipInvalidOperator 
+	cmp rcx, 0 
+	je invalidOperator
+	jmp invalidOp1
+skipInvalidOperator:
+	mov r12, rbx
+	inc rbx
+
+	call trimSpace
+secOp:
+	mov rcx, 2
+	xor r10, r10 
+	xor r11, r11
+	cmp byte[rbx], NULL 
+	je invalidOp2
+	cmp byte[rbx], LF
+	je invalidOp2
+secOpLoop:
+	cmp byte[rbx], NULL 
+	je secOpDone
+	cmp byte[rbx], LF 
+	je secOpDone
+	cmp byte[rbx], SPACE
+	je secOpDone
+	cmp byte[rbx], 48 
+	jl invalidOp2
+	cmp byte[rbx], 57
+	jg invalidOp2
+
+	movzx r10, byte[rbx]
+	sub r10, 48
+	imul r11, 10
+	add r11, r10
+
+	inc rbx
+	dec rcx 
+
+	cmp rcx, 0 
+	jne secOpLoop
+secOpDone:
+	jmp maibokDone
+invalidOp1:
+	mov rdi, errOperand1
+	jmp failDone
+invalidOp2:
+	mov rdi, errOperand2
+	jmp failDone
+invalidOperator:
+	mov rdi, errOperator
+	jmp failDone
+failDone:
 	call printString 
-	;mov rdi, rbx
-	;call printString
 maibokDone:	
+	pop r11
 	pop rbx
 	ret
-failDone:
-	mov rdi, errMsg
-	call printString 
-wellDone:
-debug1: 
-	mov rdi, debug1Msg
-	call printString
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;function for trim space;;;;;;;;;;;;;;;;;;;;;;
 ;promise , string buffer in rbx register
-global trimSpac
+global trimSpace
 trimSpace:
 	cmp byte[rbx], SPACE 
 	jne trimSpaceDone
