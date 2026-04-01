@@ -16,7 +16,7 @@ section .data
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;cin;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	SYS_read	equ	0
 	SYS_exit	equ	60
-	STDIN		equ	STDOUT 
+	STDIN		equ	0       ; (Fixed to 0 so SYS_read works properly)
 	STDERR		equ	2
 	EXIT_SUCCESS	equ	60
 	LF	equ	10 
@@ -38,9 +38,13 @@ section .data
 	errOperand1		db	"invalid operand1", NULL
 	errOperand2		db	"invalid operand2", NULL
 	errOperator		db	"invalid operator", NULL 
+  errDivZero		db	"division by zero error", NULL ; (copter): added error message for division by zero
+  errOutOfRange	db	"out of range error", NULL ; (copter): added error message for out of range
 	
 section .bss
 	buffer	resb	255	;input buffer 
+  ; (Removed error flags)
+
 section .text 
 _start:
 	mov rdi, msgInstruction1
@@ -81,12 +85,26 @@ firstOp:
 	je invalidOp1
 
 firstOpLoop:
+ ;   cmp byte[rbx], SUBTRACTION ; (copter): treat '-' as terminate point of operand1
+  ;  je invalidOp1          ;(copter): '-' is not allowed in operand1
+
 	cmp byte[rbx], SPACE	;treat SPACE as terminate point of operand1
 	je firstOpDone
+
+	cmp byte[rbx], ADDITION         ; (copter): treat '+' as terminate point of operand1
+	je firstOpDone                  ; (copter): jump out of loop safely
+	cmp byte[rbx], SUBTRACTION      ; (copter): treat '-' as terminate point of operand1
+	je firstOpDone                  ; (copter): jump out of loop safely
+	cmp byte[rbx], MULTIPLICATION   ; (copter): treat '*' as terminate point of operand1
+	je firstOpDone                  ; (copter): jump out of loop safely
+	cmp byte[rbx], FLOORDIVISION    ; (copter): treat '/' as terminate point of operand1
+	je firstOpDone                  ; (copter): jump out of loop safely
+	
+	; (Fixed logic: catch invalid letters here immediately!)
 	cmp byte[rbx], 48 
-	jl firstOpDone
+	jl invalidOp1
 	cmp byte[rbx], 57
-	jg firstOpDone
+	jg invalidOp1
 	
 	; r9 = 10*r9 + (ascii - 48)
 	movzx r10, byte[rbx]
@@ -100,6 +118,11 @@ firstOpLoop:
 	cmp rcx, 0 
 	jne firstOpLoop
 firstOpDone:
+; (copter): check if any digit was read for operand1
+	; rcx started at 4, if still 4 --> leading '-'
+	cmp rcx, 4
+	je invalidOp1
+
 	call trimSpace
 	
 operator: 
@@ -112,12 +135,8 @@ operator:
 	cmp byte[rbx], FLOORDIVISION
 	je skipInvalidOperator 
 
-	;consider if exited first op loop with ascii that not in range 48 - 57 or space 
-	;then it migt be one of available operator, which was previously checked by above block and skipped this. 
-	;eventually it must be 
-	cmp rcx, 0 
-	je invalidOperator
-	jmp invalidOp1
+	; (Fixed logic: If it didn't jump from checks above, it's definitely invalid)
+	jmp invalidOperator
 
 skipInvalidOperator:
 	movzx r12, byte[rbx]
@@ -132,6 +151,9 @@ secOp:
 	cmp byte[rbx], LF
 	je invalidOp2
 secOpLoop:
+    cmp byte[rbx], SUBTRACTION
+    je invalidOp2          ;(copter): '-' is not allowed in operand2
+
 	cmp byte[rbx], NULL 
 	je secOpDone
 	cmp byte[rbx], LF 
@@ -161,21 +183,89 @@ secOpLoop:
 	cmp byte[rbx], LF
 	je secOpDone 
 	jmp invalidOp2
-secOpDone:
-	jmp maibokDone
 
+secOpDone:
+  ; Now r9 has opr1 (r9), r11 has opr2, r12 has operator
+  ; (copter): Perform calculation and store result in rax
+  mov rax, r9
+
+  cmp r12, ADDITION
+  je doAdd
+  
+  cmp r12, SUBTRACTION
+  je doSub
+  
+  cmp r12, MULTIPLICATION
+  je doMul
+  
+  cmp r12, FLOORDIVISION
+  je doDiv
+
+doAdd:
+  add rax, r11
+  jmp printResult
+
+doSub:
+  sub rax, r11
+  jmp printResult
+
+doMul:
+  mul r11				; (copter): rax = rax * r11 and rdx will be 0 because numbers are small
+  jmp printResult
+
+doDiv:
+  cmp r11, 0            ; (copter): check if divisor op2 is zero
+  je invalidDivZero         ; (copter): if it is 0, jump to error handler
+  xor rdx, rdx			; (copter): clear rdx for division
+  div r11				; (copter): rax = floor(rax / r11)
+  jmp printResult
+
+printResult:
+
+  cmp rax, 0            ; (copter): check if result is less than 0
+  jl invalidRange       ; (copter): if negative, throw error
+
+  cmp rax, 9999         ; (copter): check if result is greater than 9999
+  jg invalidRange       ; (copter): if too big, throw error
+
+  ; (copter): result is now in rax ---> print it as decimal string
+  call printNumber
+
+  ; (copter): print newline after the result 
+  mov rdi, newLine
+  call printString
+
+  jmp maibokDone
+  
 invalidOp1:
 	mov rdi, errOperand1
 	jmp failDone
+
 invalidOp2:
 	mov rdi, errOperand2
 	jmp failDone
+
 invalidOperator:
 	mov rdi, errOperator
 	jmp failDone
+
+invalidDivZero:         ; (copter): new error handler block
+	mov rdi, errDivZero ; (copter): load the "divide by 0 error" string
+	jmp failDone        ; (copter): print it and exit
+
+invalidRange:           ; (copter): new error handler block
+	mov rdi, errOutOfRange ; (copter): load the "out of range error" string
+	jmp failDone        ; (copter): print it and exit
+
 failDone:
-	call printString 
+    call printString
+
+    ; (copter): print newline after error message
+	mov rdi, newLine
+	call printString
+
 	jmp maibokDone 
+
 maibokDone:	
 	pop r12 
 	pop r11
@@ -222,3 +312,33 @@ prtDone:
 ;handout for this func -> move target message to rdi then call this function 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	
+global printNumber
+printNumber:
+	push rbx
+	mov rbx, 10
+	xor rcx, rcx			; (copter): count number of digits
+
+digitLoop:				
+	xor rdx, rdx
+	div rbx
+	add rdx, 48				; (copter): remainder 
+	push rdx
+	inc rcx
+	test rax, rax
+	jnz digitLoop
+
+	; (copter): now rcx = number of digits
+	mov rbx, rcx			; (copter): move counter to rbx
+
+printLoop:					; (copter): print digits from highest to lowest
+	mov rax, SYS_write
+	mov rdi, STDOUT
+	mov rsi, rsp			; (copter): low byte of stack top is the asscii char
+	mov rdx, 1
+	syscall
+	pop rdx
+	dec rbx
+	jnz printLoop			; (copter): use rbx instead of rcx
+
+	pop rbx
+	ret
