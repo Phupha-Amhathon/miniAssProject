@@ -1,30 +1,17 @@
 global _start 
 section .data 
 	;store op1 at r9 , op2 at r11 and operator at r12, r9 = (r9) <r12> (r11)
-	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;count <<;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	SYS_write 	equ	1	;sys code 
 	STDOUT	equ	1 	;output location 
 	NULL	equ	0
-	msgInstruction1 db	"Enter statement: ", NULL 
-	errMsg		db	"fuck", NULL
-	;rax move sys_code 
-	;rdi move output location , stdout 
-	;rsi = address of characters to output 
-	;rdx = Number of characters to output
-	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;cin;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	SYS_read	equ	0
 	SYS_exit	equ	60
 	STDIN		equ	0       ; (Fixed to 0 so SYS_read works properly)
 	STDERR		equ	2
-	EXIT_SUCCESS	equ	60
 	LF	equ	10 
 
 	newLine		db	LF, NULL 
-	;rax selected sys servcie after called it return how many number of byte was read 
-	;rsi address to stores readed charactor 
-	;rdx number of character to read 
 	
 	MULTIPLICATION 	equ	42
 	ADDITION	equ	43
@@ -33,22 +20,19 @@ section .data
 	SPACE		equ	32
 	opd1	db 0
 	opd2	db 0
-	debug1Msg	db	"debug111111111111 ", NULL 
+
 ;;;;;;;error message;;;;;;;;;;;;;;;;;;
 	errOperand1		db	"invalid operand1", NULL
 	errOperand2		db	"invalid operand2", NULL
 	errOperator		db	"invalid operator", NULL 
-  errDivZero		db	"division by zero error", NULL ; (copter): added error message for division by zero
-  errOutOfRange	db	"out of range error", NULL ; (copter): added error message for out of range
+	errDivZero		db	"division by zero error", NULL ; (copter): added error message for division by zero
+	errOutOfRange	db	"out of range error", NULL ; (copter): added error message for out of range
 	
 section .bss
 	buffer	resb	255	;input buffer 
-  ; (Removed error flags)
-
+ 
 section .text 
 _start:
-	mov rdi, msgInstruction1
-	call printString
 	
 	;reading  
 	mov rax, SYS_read 
@@ -58,24 +42,24 @@ _start:
 	syscall 
 	mov byte[buffer + rax], NULL ;;;;mark the terminator of current buffer 
 
-	call maibok
+	call main
 	jmp exit
 exit: 
-	mov rax, EXIT_SUCCESS
+	mov rax, SYS_exit
 	mov rdi, 0
 	syscall
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;cin func;;;;;;;;;;;;;;;;;;;;;;;;;;;
-global maibok
-maibok:
+
+global main
+main:
 	push rbx
 	push r9		;first operand
 	push r10	;temp
 	push r11	;second operand
 	push r12	;operator
-	xor r9, r9 
-	xor r10, r10
-	xor r11, r11
-	xor r12, r12
+	xor r9d, r9d 
+	xor r10d, r10d
+	xor r11d, r11d
+	xor r12d, r12d
 	mov rbx, buffer
 	call trimSpace	
 
@@ -85,9 +69,6 @@ firstOp:
 	je invalidOp1
 
 firstOpLoop:
- ;   cmp byte[rbx], SUBTRACTION ; (copter): treat '-' as terminate point of operand1
-  ;  je invalidOp1          ;(copter): '-' is not allowed in operand1
-
 	cmp byte[rbx], SPACE	;treat SPACE as terminate point of operand1
 	je firstOpDone
 
@@ -100,17 +81,16 @@ firstOpLoop:
 	cmp byte[rbx], FLOORDIVISION    ; (copter): treat '/' as terminate point of operand1
 	je firstOpDone                  ; (copter): jump out of loop safely
 	
-	; (Fixed logic: catch invalid letters here immediately!)
 	cmp byte[rbx], 48 
 	jl invalidOp1
 	cmp byte[rbx], 57
 	jg invalidOp1
 	
 	; r9 = 10*r9 + (ascii - 48)
-	movzx r10, byte[rbx]
-	sub r10, 48
-	imul r9, 10
-	add r9, r10
+	movzx r10d, byte[rbx]
+	sub r10d, 48
+	imul r9d, 10
+	add r9d, r10d
 
 	;loop thing 
 	inc rbx
@@ -118,7 +98,6 @@ firstOpLoop:
 	cmp rcx, 0 
 	jne firstOpLoop
 firstOpDone:
-; (copter): check if any digit was read for operand1
 	; rcx started at 4, if still 4 --> leading '-'
 	cmp rcx, 4
 	je invalidOp1
@@ -135,15 +114,14 @@ operator:
 	cmp byte[rbx], FLOORDIVISION
 	je skipInvalidOperator 
 
-	; (Fixed logic: If it didn't jump from checks above, it's definitely invalid)
 	jmp invalidOperator
 
 skipInvalidOperator:
-	movzx r12, byte[rbx]
+	movzx r12d, byte[rbx]
 	inc rbx
 
 	call trimSpace
-	xor r10, r10 
+	xor r10d, r10d 
 secOp:
 	mov rcx, 4
 	cmp byte[rbx], NULL 
@@ -165,10 +143,10 @@ secOpLoop:
 	cmp byte[rbx], 57
 	jg invalidOp2
 
-	movzx r10, byte[rbx]
-	sub r10, 48
-	imul r11, 10
-	add r11, r10
+	movzx r10d, byte[rbx]
+	sub r10d, 48
+	imul r11d, 10
+	add r11d, r10d
 
 	;loop thing 
 	inc rbx
@@ -187,45 +165,45 @@ secOpLoop:
 secOpDone:
   ; Now r9 has opr1 (r9), r11 has opr2, r12 has operator
   ; (copter): Perform calculation and store result in rax
-  mov rax, r9
+  mov eax, r9d
 
-  cmp r12, ADDITION
+  cmp r12d, ADDITION
   je doAdd
   
-  cmp r12, SUBTRACTION
+  cmp r12d, SUBTRACTION
   je doSub
   
-  cmp r12, MULTIPLICATION
+  cmp r12d, MULTIPLICATION
   je doMul
   
-  cmp r12, FLOORDIVISION
+  cmp r12d, FLOORDIVISION
   je doDiv
 
 doAdd:
-  add rax, r11
+  add eax, r11d
   jmp printResult
 
 doSub:
-  sub rax, r11
+  sub eax, r11d
   jmp printResult
 
 doMul:
-  mul r11				; (copter): rax = rax * r11 and rdx will be 0 because numbers are small
+  mul r11d				; (copter): rax = rax * r11 and rdx will be 0 because numbers are small
   jmp printResult
 
 doDiv:
-  cmp r11, 0            ; (copter): check if divisor op2 is zero
+  cmp r11d, 0            ; (copter): check if divisor op2 is zero
   je invalidDivZero         ; (copter): if it is 0, jump to error handler
-  xor rdx, rdx			; (copter): clear rdx for division
-  div r11				; (copter): rax = floor(rax / r11)
+  xor edx, edx			; (copter): clear rdx for division
+  div r11d				; (copter): rax = floor(rax / r11)
   jmp printResult
 
 printResult:
 
-  cmp rax, 0            ; (copter): check if result is less than 0
+  cmp eax, 0            ; (copter): check if result is less than 0
   jl invalidRange       ; (copter): if negative, throw error
 
-  cmp rax, 9999         ; (copter): check if result is greater than 9999
+  cmp eax, 9999         ; (copter): check if result is greater than 9999
   jg invalidRange       ; (copter): if too big, throw error
 
   ; (copter): result is now in rax ---> print it as decimal string
@@ -235,7 +213,7 @@ printResult:
   mov rdi, newLine
   call printString
 
-  jmp maibokDone
+  jmp mainDone
   
 invalidOp1:
 	mov rdi, errOperand1
@@ -264,9 +242,9 @@ failDone:
 	mov rdi, newLine
 	call printString
 
-	jmp maibokDone 
+	jmp mainDone 
 
-maibokDone:	
+mainDone:	
 	pop r12 
 	pop r11
 	pop r10
