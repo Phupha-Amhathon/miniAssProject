@@ -2,26 +2,21 @@ global _start
 section .data 
 	;store op1 at r9 , op2 at r11 and operator at r12, r9 = (r9) <r12> (r11)
 	SYS_write 	equ	1	;sys code 
-	STDOUT	equ	1 	;output location 
-	NULL	equ	0
-
+	STDOUT		equ	1 	;output location 
+	NULL		equ	0
 	SYS_read	equ	0
 	SYS_exit	equ	60
 	STDIN		equ	0       ; (Fixed to 0 so SYS_read works properly)
 	STDERR		equ	2
-	LF	equ	10 
-
+	LF		equ	10 
 	newLine		db	LF, NULL 
-	
 	MULTIPLICATION 	equ	42
 	ADDITION	equ	43
 	SUBTRACTION	equ	45		
 	FLOORDIVISION 	equ	47
 	SPACE		equ	32
-	opd1	db 0
-	opd2	db 0
 
-;;;;;;;error message;;;;;;;;;;;;;;;;;;
+	;error message
 	errOperand1		db	"invalid operand1", NULL
 	errOperand2		db	"invalid operand2", NULL
 	errOperator		db	"invalid operator", NULL 
@@ -33,17 +28,19 @@ section .bss
  
 section .text 
 _start:
-	
-	;reading  
+	;reading input  
 	mov rax, SYS_read 
 	mov rdi, STDIN 
 	mov rsi, buffer 
 	mov rdx, 255 
 	syscall 
-	mov byte[buffer + rax], NULL ;;;;mark the terminator of current buffer 
+	
+	;check for empty input 
+	cmp rax, 0 
+	jle exit
 
+	mov byte[buffer + rax - 1], NULL ;mark the terminator of current buffer 
 	call main
-	jmp exit
 exit: 
 	mov rax, SYS_exit
 	mov rdi, 0
@@ -52,26 +49,27 @@ exit:
 global main
 main:
 	push rbx
-	push r9		;first operand
-	push r10	;temp
-	push r11	;second operand
-	push r12	;operator
+	push r9				;first operand
+	push r10			;temp
+	push r11			;second operand
+	push r12			;operator
+
 	xor r9d, r9d 
 	xor r10d, r10d
 	xor r11d, r11d
 	xor r12d, r12d
-	mov rbx, buffer
+
+	mov rbx, buffer			;buffer ref
 	call trimSpace	
 
 firstOp:
-	mov rcx, 4	;extract first 4 valid digit , excess one consider to be operator 
+	mov rcx, 4			;extract first 4 valid digit , excess one consider to be operator 
 	cmp byte[rbx], NULL 
 	je invalidOp1
 
 firstOpLoop:
-	cmp byte[rbx], SPACE	;treat SPACE as terminate point of operand1
+	cmp byte[rbx], SPACE		;treat SPACE as terminate point of operand1
 	je firstOpDone
-
 	cmp byte[rbx], ADDITION         ; (copter): treat '+' as terminate point of operand1
 	je firstOpDone                  ; (copter): jump out of loop safely
 	cmp byte[rbx], SUBTRACTION      ; (copter): treat '-' as terminate point of operand1
@@ -97,8 +95,8 @@ firstOpLoop:
 	dec rcx 
 	cmp rcx, 0 
 	jne firstOpLoop
+
 firstOpDone:
-	; rcx started at 4, if still 4 --> leading '-'
 	cmp rcx, 4
 	je invalidOp1
 
@@ -122,20 +120,19 @@ skipInvalidOperator:
 
 	call trimSpace
 	xor r10d, r10d 
+
 secOp:
 	mov rcx, 4
 	cmp byte[rbx], NULL 
 	je invalidOp2
-	cmp byte[rbx], LF
-	je invalidOp2
-secOpLoop:
-    cmp byte[rbx], SUBTRACTION
-    je invalidOp2          ;(copter): '-' is not allowed in operand2
+	;cmp byte[rbx], LF
+	;je invalidOp2
 
+secOpLoop:
 	cmp byte[rbx], NULL 
 	je secOpDone
-	cmp byte[rbx], LF 
-	je secOpDone
+	;cmp byte[rbx], LF 
+	;je secOpDone
 	cmp byte[rbx], SPACE
 	je secOpDone
 	cmp byte[rbx], 48 
@@ -154,16 +151,12 @@ secOpLoop:
 	cmp rcx, 0 
 	jne secOpLoop
 
-	;loop done
-	call trimSpace
-	cmp byte[rbx], NULL 
-	je secOpDone
-	cmp byte[rbx], LF
-	je secOpDone 
-	jmp invalidOp2
-
 secOpDone:
-  ; Now r9 has opr1 (r9), r11 has opr2, r12 has operator
+ 	call trimSpace
+	cmp byte[rbx], NULL 
+	jne invalidOp2
+
+ ; Now r9 has opr1 (r9), r11 has opr2, r12 has operator
   ; (copter): Perform calculation and store result in rax
   mov eax, r9d
 
@@ -262,7 +255,6 @@ trimSpace:
 	jmp trimSpace
 trimSpaceDone:
 	ret
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;count func;;;;;;;;;;;;;;;;;;;;;
 global printString 
