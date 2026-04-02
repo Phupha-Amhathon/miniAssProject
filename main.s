@@ -15,6 +15,9 @@ section .data
 	SUBTRACTION	equ	45		
 	FLOORDIVISION 	equ	47
 	SPACE		equ	32
+	
+	;message 
+	msgInstruction		db	"Enter statement: ", NULL
 
 	;error message
 	errOperand1		db	"invalid operand1", NULL
@@ -28,6 +31,10 @@ section .bss
  
 section .text 
 _start:
+	;instruction 
+	mov rdi, msgInstruction 
+	call printString 
+	
 	;reading input  
 	mov rax, SYS_read 
 	mov rdi, STDIN 
